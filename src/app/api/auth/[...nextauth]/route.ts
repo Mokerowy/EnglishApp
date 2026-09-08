@@ -19,10 +19,23 @@ function getDirectUrl(url: string | undefined): string | undefined {
   return url;
 }
 
-const directUrl = getDirectUrl(process.env.DATABASE_URL);
-const pool = new Pool({ connectionString: directUrl });
-const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+let prismaInstance: PrismaClient | null = null;
+
+function getPrisma() {
+  if (!prismaInstance && process.env.DATABASE_URL) {
+    try {
+      const directUrl = getDirectUrl(process.env.DATABASE_URL);
+      if (directUrl) {
+        const pool = new Pool({ connectionString: directUrl });
+        const adapter = new PrismaPg(pool);
+        prismaInstance = new PrismaClient({ adapter });
+      }
+    } catch (e) {
+      console.warn("Błąd inicjalizacji Prisma:", e);
+    }
+  }
+  return prismaInstance;
+}
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -33,8 +46,11 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Hasło", type: "password" }
       },
       async authorize(credentials) {
+        const inputEmail = (credentials?.email || "").trim().toLowerCase();
+        const inputPassword = (credentials?.password || "").trim();
+
         // Domyślne konta demo dla wersji produkcyjnej (Vercel)
-        if ((credentials.email === "admin" || credentials.email === "admin@effectiveenglish.pl") && (credentials.password === "admin123" || credentials.password === "admin")) {
+        if ((inputEmail === "admin" || inputEmail === "admin@effectiveenglish.pl") && (inputPassword === "admin123" || inputPassword === "admin")) {
           return {
             id: "admin-demo",
             email: "admin@effectiveenglish.pl",
@@ -42,7 +58,7 @@ export const authOptions: NextAuthOptions = {
             role: "ADMIN"
           };
         }
-        if ((credentials.email === "nauczyciel" || credentials.email === "nauczyciel@effectiveenglish.pl") && credentials.password === "teacher123") {
+        if ((inputEmail === "nauczyciel" || inputEmail === "nauczyciel@effectiveenglish.pl") && (inputPassword === "teacher123" || inputPassword === "nauczyciel")) {
           return {
             id: "teacher-demo",
             email: "nauczyciel@effectiveenglish.pl",
@@ -50,7 +66,7 @@ export const authOptions: NextAuthOptions = {
             role: "TEACHER"
           };
         }
-        if ((credentials.email === "uczen" || credentials.email === "uczen@effectiveenglish.pl") && credentials.password === "student123") {
+        if ((inputEmail === "uczen" || inputEmail === "uczen@effectiveenglish.pl") && (inputPassword === "student123" || inputPassword === "uczen")) {
           return {
             id: "student-demo",
             email: "uczen@effectiveenglish.pl",
@@ -59,42 +75,35 @@ export const authOptions: NextAuthOptions = {
           };
         }
 
-        try {
-          const user = await prisma.user.findFirst({
-            where: {
-              OR: [
-                { email: credentials.email },
-                { login: credentials.email }
-              ]
+        const prisma = getPrisma();
+        if (prisma) {
+          try {
+            const user = await prisma.user.findFirst({
+              where: {
+                OR: [
+                  { email: inputEmail },
+                  { login: inputEmail }
+                ]
+              }
+            });
+
+            if (user) {
+              const isPasswordValid = await bcrypt.compare(inputPassword, user.password);
+              if (isPasswordValid && user.isActive) {
+                return {
+                  id: user.id,
+                  email: user.email || "",
+                  name: `${user.firstName} ${user.lastName}`,
+                  role: user.role
+                };
+              }
             }
-          });
-
-          if (!user) {
-            throw new Error("Nie znaleziono użytkownika");
+          } catch (dbError) {
+            console.warn("Błąd wyszukiwania w bazie danych:", dbError);
           }
-
-          const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
-
-          if (!isPasswordValid) {
-            throw new Error("Błędne hasło");
-          }
-
-          if (!user.isActive) {
-            throw new Error("Twoje konto oczekuje na weryfikację przez administratora");
-          }
-
-          return {
-            id: user.id,
-            email: user.email || "",
-            name: `${user.firstName} ${user.lastName}`,
-            role: user.role
-          };
-        } catch (dbError: any) {
-          if (dbError.message?.includes("Błędne hasło") || dbError.message?.includes("oczekuje na weryfikację")) {
-            throw dbError;
-          }
-          throw new Error("Nie znaleziono użytkownika lub błąd logowania");
         }
+
+        throw new Error("Błędny email lub hasło");
       }
     })
   ],
