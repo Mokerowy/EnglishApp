@@ -29,7 +29,7 @@ function generatePassword() {
   return pass;
 }
 
-export async function DELETE(req: Request, context: { params: { id: string } }) {
+export async function DELETE(req: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const token = await getToken({ req: req as any, secret: process.env.NEXTAUTH_SECRET || "super_secret_key_for_dev_only" });
     if (!token || token.role !== "ADMIN") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -47,7 +47,7 @@ export async function DELETE(req: Request, context: { params: { id: string } }) 
   }
 }
 
-export async function PATCH(req: Request, context: { params: { id: string } }) {
+export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const token = await getToken({ req: req as any, secret: process.env.NEXTAUTH_SECRET || "super_secret_key_for_dev_only" });
     if (!token || token.role !== "ADMIN") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
