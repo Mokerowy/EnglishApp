@@ -11,7 +11,7 @@ export async function middleware(req: NextRequest) {
     if (isAuth) {
       if (!token.role) {
         // Zepsuty stary token z poprzednich sesji deweloperskich
-        return null; // Pozwoli im wejść na główną i zalogować się ponownie
+        return NextResponse.next(); // Pozwoli im wejść na główną i zalogować się ponownie
       }
       if (token.role === "ADMIN") {
         return NextResponse.redirect(new URL("/admin", req.url));
@@ -21,7 +21,7 @@ export async function middleware(req: NextRequest) {
         return NextResponse.redirect(new URL("/client", req.url));
       }
     }
-    return null;
+    return NextResponse.next();
   }
 
   if (!isAuth) {
@@ -43,7 +43,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL("/", req.url));
   }
 
-  return null;
+  return NextResponse.next();
 }
 
 export const config = {
