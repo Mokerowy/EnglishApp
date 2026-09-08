@@ -34,7 +34,7 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         // Domyślne konta demo dla wersji produkcyjnej (Vercel)
-        if ((credentials.email === "admin" || credentials.email === "admin@effectiveenglish.pl") && credentials.password === "admin123") {
+        if ((credentials.email === "admin" || credentials.email === "admin@effectiveenglish.pl") && (credentials.password === "admin123" || credentials.password === "admin")) {
           return {
             id: "admin-demo",
             email: "admin@effectiveenglish.pl",
