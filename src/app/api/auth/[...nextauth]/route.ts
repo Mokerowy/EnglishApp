@@ -33,39 +33,68 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Hasło", type: "password" }
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          throw new Error("Podaj login/email i hasło");
+        // Domyślne konta demo dla wersji produkcyjnej (Vercel)
+        if ((credentials.email === "admin" || credentials.email === "admin@effectiveenglish.pl") && credentials.password === "admin123") {
+          return {
+            id: "admin-demo",
+            email: "admin@effectiveenglish.pl",
+            name: "Szef Właściciel",
+            role: "ADMIN"
+          };
+        }
+        if ((credentials.email === "nauczyciel" || credentials.email === "nauczyciel@effectiveenglish.pl") && credentials.password === "teacher123") {
+          return {
+            id: "teacher-demo",
+            email: "nauczyciel@effectiveenglish.pl",
+            name: "Jan Nauczycielski",
+            role: "TEACHER"
+          };
+        }
+        if ((credentials.email === "uczen" || credentials.email === "uczen@effectiveenglish.pl") && credentials.password === "student123") {
+          return {
+            id: "student-demo",
+            email: "uczen@effectiveenglish.pl",
+            name: "Piotr Uczniowski",
+            role: "STUDENT"
+          };
         }
 
-        const user = await prisma.user.findFirst({
-          where: {
-            OR: [
-              { email: credentials.email },
-              { login: credentials.email }
-            ]
+        try {
+          const user = await prisma.user.findFirst({
+            where: {
+              OR: [
+                { email: credentials.email },
+                { login: credentials.email }
+              ]
+            }
+          });
+
+          if (!user) {
+            throw new Error("Nie znaleziono użytkownika");
           }
-        });
 
-        if (!user) {
-          throw new Error("Nie znaleziono użytkownika");
+          const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
+
+          if (!isPasswordValid) {
+            throw new Error("Błędne hasło");
+          }
+
+          if (!user.isActive) {
+            throw new Error("Twoje konto oczekuje na weryfikację przez administratora");
+          }
+
+          return {
+            id: user.id,
+            email: user.email || "",
+            name: `${user.firstName} ${user.lastName}`,
+            role: user.role
+          };
+        } catch (dbError: any) {
+          if (dbError.message?.includes("Błędne hasło") || dbError.message?.includes("oczekuje na weryfikację")) {
+            throw dbError;
+          }
+          throw new Error("Nie znaleziono użytkownika lub błąd logowania");
         }
-
-        const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
-
-        if (!isPasswordValid) {
-          throw new Error("Błędne hasło");
-        }
-
-        if (!user.isActive) {
-          throw new Error("Twoje konto oczekuje na weryfikację przez administratora");
-        }
-
-        return {
-          id: user.id,
-          email: user.email || "",
-          name: `${user.firstName} ${user.lastName}`,
-          role: user.role
-        };
       }
     })
   ],
